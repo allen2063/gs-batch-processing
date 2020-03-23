@@ -9,13 +9,12 @@ import org.springframework.batch.core.configuration.annotation.EnableBatchProces
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
-import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
-import org.springframework.batch.item.database.JdbcBatchItemWriter;
-import org.springframework.batch.item.database.JdbcPagingItemReader;
-import org.springframework.batch.item.database.JpaPagingItemReader;
+import org.springframework.batch.item.database.*;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.batch.item.database.support.AbstractSqlPagingQueryProvider;
+import org.springframework.batch.item.database.support.HsqlPagingQueryProvider;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
@@ -27,6 +26,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import javax.persistence.EntityManagerFactory;
+import java.util.HashMap;
+import java.util.Map;
 
 
 // tag::setup[]
@@ -43,6 +44,7 @@ public class BatchConfiguration {
 //	@Autowired
 //	private final EntityManagerFactory managerFactory;
 
+	@Autowired
 	private DataSource dataSource;
 
 
@@ -75,10 +77,18 @@ public class BatchConfiguration {
 
 	@Bean
 	public JdbcPagingItemReader<Person> jdbcReaders(){
+
+		Map<String, Order> sortKeys = new HashMap<>(1);
+		sortKeys.put("fist_name", Order.DESCENDING);
+
+		AbstractSqlPagingQueryProvider provider = new HsqlPagingQueryProvider();
+		provider.setSelectClause("SELECT FIRST_name, last_NAME");
+		provider.setFromClause("FZ_BACKUP.PERSON");
+		provider.setSortKeys(sortKeys);
 		return new JdbcPagingItemReaderBuilder<Person>()
+				.name("personItemReader")
 				.dataSource(dataSource)
-				.selectClause("elect i.msg_id,i.msg_content")
-				.fromClause("jqy_t_msg_inf")
+				.queryProvider(provider)
 				.build();
 	}
 

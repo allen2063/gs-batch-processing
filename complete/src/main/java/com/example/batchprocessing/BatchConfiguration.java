@@ -9,10 +9,12 @@ import org.springframework.batch.core.configuration.annotation.EnableBatchProces
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.database.*;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.database.builder.JdbcPagingItemReaderBuilder;
 import org.springframework.batch.item.database.builder.JpaPagingItemReaderBuilder;
+import org.springframework.batch.item.database.orm.JpaNativeQueryProvider;
 import org.springframework.batch.item.database.support.AbstractSqlPagingQueryProvider;
 import org.springframework.batch.item.database.support.HsqlPagingQueryProvider;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -26,6 +28,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import javax.persistence.EntityManagerFactory;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,8 +44,8 @@ public class BatchConfiguration {
 	@Autowired
 	public StepBuilderFactory stepBuilderFactory;
 
-//	@Autowired
-//	private final EntityManagerFactory managerFactory;
+	@Autowired
+	private EntityManagerFactory managerFactory;
 
 	@Autowired
 	private DataSource dataSource;
@@ -75,15 +78,38 @@ public class BatchConfiguration {
 //				.build();
 //	}
 
+	@Bean(destroyMethod="")
+	public ItemReader<? extends Person> jpaReader() {
+		JpaPagingItemReader<Person> reader = new JpaPagingItemReader<Person>();
+		String sqlQuery = "SELECT first_name, last_name from FZ_BACKUP.PERSON";
+		try {
+			JpaNativeQueryProvider<Person> queryProvider = new JpaNativeQueryProvider<Person>();
+			queryProvider.setSqlQuery(sqlQuery);
+			queryProvider.setEntityClass(Person.class);
+			queryProvider.afterPropertiesSet();
+			reader.setEntityManagerFactory(managerFactory);
+			reader.setPageSize(3);
+			reader.setQueryProvider(queryProvider);
+//			reader.setParameterValues(Collections.<String, Object>singletonMap("limit", 1));
+			reader.afterPropertiesSet();
+			reader.setSaveState(true);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return reader;
+	}
+
 	@Bean
 	public JdbcPagingItemReader<Person> jdbcReaders(){
 
 		Map<String, Order> sortKeys = new HashMap<>(1);
-		sortKeys.put("fist_name", Order.DESCENDING);
+		sortKeys.put("first_name", Order.DESCENDING);
 
 		AbstractSqlPagingQueryProvider provider = new HsqlPagingQueryProvider();
-		provider.setSelectClause("SELECT FIRST_name, last_NAME");
-		provider.setFromClause("FZ_BACKUP.PERSON");
+		provider.setSelectClause("SELECT first_name, last_name");
+		provider.setFromClause("from FZ_BACKUP.PERSON");
+		provider.setWhereClause("where first_name <> '1'");
 		provider.setSortKeys(sortKeys);
 		return new JdbcPagingItemReaderBuilder<Person>()
 				.name("personItemReader")
@@ -101,7 +127,7 @@ public class BatchConfiguration {
 	public JdbcBatchItemWriter<Person> writer(DataSource dataSource) {
 		return new JdbcBatchItemWriterBuilder<Person>()
 			.itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
-			.sql("INSERT INTO people (first_name, last_name) VALUES (:firstName, :lastName)")
+			.sql("INSERT INTO fz_backup.people (first_name, last_name) VALUES (:firstName, :lastName)")
 			.dataSource(dataSource)
 			.build();
 	}
@@ -122,7 +148,7 @@ public class BatchConfiguration {
 	public Step step1(JdbcBatchItemWriter<Person> writer) {
 		return stepBuilderFactory.get("step1")
 			.<Person, Person> chunk(10)
-			.reader(jdbcReaders())
+			.reader(jpaReader())
 			.processor(processor())
 			.writer(writer)
 			.build();

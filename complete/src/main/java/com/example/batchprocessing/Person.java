@@ -1,7 +1,13 @@
 package com.example.batchprocessing;
 
-public class Person {
+import javax.persistence.Entity;
+import javax.persistence.Id;
+import javax.persistence.Table;
 
+@Entity
+@Table(name = "person",schema = "fz_backup")
+public class Person {
+	@Id
 	private String lastName;
 	private String firstName;
 
